@@ -1,51 +1,88 @@
 #!/usr/bin/env bash
-# claude-code-statusline v1.1
+# claude-code-statusline v1.2
 #
-# Three-line status bar for Claude Code:
-#   Line 1: [Model] BAR 42% | 🌿 branch* +150/-30 | 📁 project | $0.08 | ⏰ 7m 3s
-#   Line 2: current ●●●●○○○○○○ 28%  ↻ 7:00pm           (5-hour rate limit)
-#   Line 3: weekly  ●●●●●●●●○○ 79%  ↻ mar 10, 10:00am  (7-day rate limit)
+# Three-line status bar for Claude Code, designed for power users who want
+# detailed token management and rate-limit visibility instead of a progress bar:
 #
-# Lines 2 and 3 appear only for Claude.ai Pro/Max subscribers (the only
-# sessions that receive `rate_limits.*` from Claude Code).
+#   Line 1: [Opus · 1M] | 🌿 branch* +150/-30 | 📁 project | 🧠 high | ⏰ 7m 3s
+#   Line 2: ctx 124k/1M (42%) · in 58k · read 60k · new 2k · out 4k
+#   Line 3: current 28% ↻ 7:00pm | weekly 79% ↻ mar 10, 10:00am
+#
+# Line 3 appears only for Claude.ai Pro/Max subscribers (the only sessions
+# that receive `rate_limits.*` from Claude Code).
 #
 # ENV variables (all optional):
-#   CLAUDE_STATUSLINE_ASCII=1     plain ASCII, no emoji/Unicode bars
+#   CLAUDE_STATUSLINE_ASCII=1     plain ASCII, no emoji/Unicode
 #   CLAUDE_STATUSLINE_NERDFONT=1  use Nerd Font glyphs instead of emoji
-#   COLORTERM=truecolor           enable 24-bit gradient bar (auto-detected)
 #
 # Deps: only `node` (ships with Claude Code). No jq, no git, no python required.
 
 input=$(cat)
 
 # ---------------------------------------------------------------------------
-# Parse JSON + pre-format fields in a single node call
+# Parse JSON + read settings + pre-format everything in one node call
 # ---------------------------------------------------------------------------
 parsed=$(printf '%s' "$input" | node -e '
 let data = "";
 process.stdin.on("data", d => data += d);
 process.stdin.on("end", () => {
-  const fields = Array(14).fill("");
+  const fields = Array(18).fill("");
   try {
-    const o = JSON.parse(data);
+    const fs  = require("fs");
+    const os  = require("os");
+    const o   = JSON.parse(data);
     const cwd = (o.workspace && o.workspace.current_dir) || o.cwd || "";
     const dir = cwd.split(/[\\\\/]+/).filter(Boolean).pop() || "";
-    const modelFull = (o.model && o.model.display_name) || "";
+    const modelFull  = (o.model && o.model.display_name) || "";
     const modelShort = modelFull.split(/\s+/)[0] || "Claude";
-    const pct = Math.floor(((o.context_window && o.context_window.used_percentage) || 0));
-    const cost = Number((o.cost && o.cost.total_cost_usd) || 0);
-    const costFmt = "$" + cost.toFixed(2);
-    const costLevel = cost <= 0 ? "zero" : cost > 10 ? "high" : "normal";
-    const durMs = Number((o.cost && o.cost.total_duration_ms) || 0);
+
+    // --- Context window ---------------------------------------------------
+    const cw       = o.context_window || {};
+    const ctxSize  = cw.context_window_size || 0;
+    const pctRaw   = cw.used_percentage;
+    const pct      = Math.floor(pctRaw == null ? 0 : pctRaw);
+
+    // current_usage is null before the first API call
+    const cu       = cw.current_usage || {};
+    const tIn      = Number(cu.input_tokens || 0);
+    const tRead    = Number(cu.cache_read_input_tokens || 0);
+    const tNew     = Number(cu.cache_creation_input_tokens || 0);
+    const tOut     = Number(cu.output_tokens || 0);
+    // Per docs: context-counting tokens = in + cache_read + cache_creation
+    const tUsed    = tIn + tRead + tNew;
+
+    // --- Format helpers ---------------------------------------------------
+    const humanize = (n) => {
+      if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/, "") + "M";
+      if (n >= 1000)    return Math.round(n/1000) + "k";
+      return String(n);
+    };
+    const ctxSizeLabel = humanize(ctxSize);
+
+    // --- Session / cost / duration ---------------------------------------
+    const durMs  = Number((o.cost && o.cost.total_duration_ms) || 0);
     const durSec = Math.floor(durMs / 1000);
     const durFmt = Math.floor(durSec / 60) + "m " + (durSec % 60) + "s";
+
     const linesAdd = Number((o.cost && o.cost.total_lines_added) || 0);
     const linesRem = Number((o.cost && o.cost.total_lines_removed) || 0);
+
     const sid = (o.session_id || "default").replace(/[^a-zA-Z0-9_-]/g, "");
 
-    const rl = o.rate_limits || {};
-    const rl5 = rl.five_hour || {};
-    const rl7 = rl.seven_day || {};
+    // --- Thinking effort from ~/.claude/settings.json --------------------
+    let effort = "";
+    try {
+      const settingsPath = os.homedir() + "/.claude/settings.json";
+      if (fs.existsSync(settingsPath)) {
+        const s = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+        effort = (s.env && s.env.CLAUDE_CODE_EFFORT_LEVEL) || "";
+      }
+    } catch (e) {}
+
+    // --- Rate limits ------------------------------------------------------
+    const rl  = o.rate_limits || {};
+    const rl5 = rl.five_hour  || {};
+    const rl7 = rl.seven_day  || {};
     const rl5pct = rl5.used_percentage != null ? Math.floor(rl5.used_percentage) : "";
     const rl7pct = rl7.used_percentage != null ? Math.floor(rl7.used_percentage) : "";
 
@@ -65,26 +102,34 @@ process.stdin.on("end", () => {
     };
 
     fields[0]  = modelShort;
-    fields[1]  = dir;
-    fields[2]  = cwd;
-    fields[3]  = String(pct);
-    fields[4]  = costFmt;
-    fields[5]  = costLevel;
-    fields[6]  = durFmt;
-    fields[7]  = String(linesAdd);
-    fields[8]  = String(linesRem);
-    fields[9]  = sid;
-    fields[10] = rl5pct === "" ? "" : String(rl5pct);
-    fields[11] = fmtReset(rl5.resets_at);
-    fields[12] = rl7pct === "" ? "" : String(rl7pct);
-    fields[13] = fmtReset(rl7.resets_at);
+    fields[1]  = ctxSizeLabel;         // "1M" / "200k"
+    fields[2]  = dir;
+    fields[3]  = cwd;
+    fields[4]  = String(pct);
+    fields[5]  = humanize(tUsed);      // "124k"
+    fields[6]  = humanize(tIn);        // "58k"
+    fields[7]  = humanize(tRead);      // "60k"
+    fields[8]  = humanize(tNew);       // "2k"
+    fields[9]  = humanize(tOut);       // "4k"
+    fields[10] = durFmt;
+    fields[11] = String(linesAdd);
+    fields[12] = String(linesRem);
+    fields[13] = sid;
+    fields[14] = effort;               // "high"/"medium"/"low" or ""
+    fields[15] = rl5pct === "" ? "" : String(rl5pct);
+    fields[16] = fmtReset(rl5.resets_at);
+    fields[17] = rl7pct === "" ? "" : String(rl7pct);
+    // fmtReset for rl7 appended separately because we kept fields at 18
+    fields.push(fmtReset(rl7.resets_at));
   } catch (e) {}
   process.stdout.write(fields.join("\t"));
 });
 ' 2>/dev/null)
 
-IFS=$'\t' read -r MODEL DIR CWD PCT COST_FMT COST_LEVEL DUR_FMT \
-                 LINES_ADD LINES_REM SESSION_ID \
+IFS=$'\t' read -r MODEL CTX_SIZE DIR CWD PCT \
+                 T_USED T_IN T_READ T_NEW T_OUT \
+                 DUR_FMT LINES_ADD LINES_REM SESSION_ID \
+                 EFFORT \
                  RL5_PCT RL5_RESET RL7_PCT RL7_RESET <<< "$parsed"
 
 [ -z "$PCT" ] && PCT=0
@@ -99,94 +144,43 @@ CYAN='\033[36m';  BLUE='\033[34m';   MAGENTA='\033[35m'
 DIM='\033[2m';    BOLD='\033[1m';    RESET='\033[0m'
 
 # ---------------------------------------------------------------------------
-# Icon set — emoji / Nerd Font / ASCII
+# Icons — emoji / Nerd Font / ASCII
 # ---------------------------------------------------------------------------
 if [ "${CLAUDE_STATUSLINE_ASCII:-}" = "1" ]; then
-  I_DIR="[D]"; I_BRANCH="[B]"; I_TIME="[T]"; I_RESET="->"
+  I_DIR="[D]"; I_BRANCH="[B]"; I_TIME="[T]"; I_RESET="->"; I_THINK="[E]"
 elif [ "${CLAUDE_STATUSLINE_NERDFONT:-}" = "1" ]; then
-  I_DIR=$'\uf07b'; I_BRANCH=$'\ue725'; I_TIME=$'\uf64f'; I_RESET=$'\uf0e2'
+  I_DIR=$'\uf07b'; I_BRANCH=$'\ue725'; I_TIME=$'\uf64f'; I_RESET=$'\uf0e2'; I_THINK=$'\uf0eb'
 else
-  I_DIR="📁"; I_BRANCH="🌿"; I_TIME="⏰"; I_RESET="↻"
+  I_DIR="📁"; I_BRANCH="🌿"; I_TIME="⏰"; I_RESET="↻"; I_THINK="🧠"
 fi
 
 # ---------------------------------------------------------------------------
-# Progress bar — truecolor gradient when COLORTERM=truecolor, else solid color
+# Context % → color (used for both the percent text and token total)
 # ---------------------------------------------------------------------------
-render_bar() {
-  local pct=$1 width=10
-  [ "$pct" -gt 100 ] && pct=100
-  [ "$pct" -lt 0 ] && pct=0
-  local filled=$((pct * width / 100))
-  local empty=$((width - filled))
-
-  local fill_char='█' empty_char='░'
-  if [ "${CLAUDE_STATUSLINE_ASCII:-}" = "1" ]; then
-    fill_char='#'; empty_char='-'
-  fi
-
-  if [ "${CLAUDE_STATUSLINE_ASCII:-}" != "1" ] \
-     && { [ "${COLORTERM:-}" = "truecolor" ] || [ "${COLORTERM:-}" = "24bit" ]; }; then
-    # 24-bit gradient green → yellow → red across the filled segment
-    local bar='' i ratio r g b rr
-    for ((i=0; i<filled; i++)); do
-      ratio=$(( width > 1 ? i * 100 / (width - 1) : 0 ))
-      if [ "$ratio" -le 50 ]; then
-        r=$((ratio * 255 / 50))
-        g=$((200 + ratio * 55 / 50))
-        b=0
-      else
-        rr=$((ratio - 50))
-        r=255
-        g=$((255 - rr * 205 / 50))
-        b=$((rr * 50 / 50))
-      fi
-      bar+="\033[38;2;${r};${g};${b}m${fill_char}"
-    done
-    if [ "$empty" -gt 0 ]; then
-      local pad; printf -v pad "%${empty}s"
-      bar+="\033[38;2;80;80;80m${pad// /${empty_char}}"
-    fi
-    printf '%b' "${bar}${RESET}"
-    return
-  fi
-
-  # Fallback: threshold-based solid color
-  local color
-  if   [ "$pct" -ge 90 ]; then color="$RED"
-  elif [ "$pct" -ge 70 ]; then color="$YELLOW"
-  else                         color="$GREEN"
-  fi
-  local f='' e=''
-  [ "$filled" -gt 0 ] && { printf -v f "%${filled}s"; f="${f// /${fill_char}}"; }
-  [ "$empty"  -gt 0 ] && { printf -v e "%${empty}s";  e="${e// /${empty_char}}"; }
-  printf '%b' "${color}${f}${DIM}${e}${RESET}"
-}
+if   [ "$PCT" -ge 90 ]; then PCT_COLOR="$RED"
+elif [ "$PCT" -ge 70 ]; then PCT_COLOR="$YELLOW"
+else                         PCT_COLOR="$GREEN"
+fi
 
 # ---------------------------------------------------------------------------
-# Dot bar for rate limits — threshold-colored solid blocks
+# Thinking effort → color (high = red/demanding, medium = yellow, low = dim)
 # ---------------------------------------------------------------------------
-render_dot_bar() {
-  local pct=$1 width=10
-  [ "$pct" -gt 100 ] && pct=100
-  [ "$pct" -lt 0 ] && pct=0
-  local filled=$((pct * width / 100))
-  local empty=$((width - filled))
+case "$EFFORT" in
+  high)   EFFORT_COLOR="$MAGENTA" ;;
+  medium) EFFORT_COLOR="$YELLOW"  ;;
+  low)    EFFORT_COLOR="$DIM"     ;;
+  *)      EFFORT_COLOR=""         ;;
+esac
 
-  local fill_char='●' empty_char='○'
-  if [ "${CLAUDE_STATUSLINE_ASCII:-}" = "1" ]; then
-    fill_char='*'; empty_char='.'
+# ---------------------------------------------------------------------------
+# Rate-limit colors (per-window)
+# ---------------------------------------------------------------------------
+rl_color() {
+  local p=$1
+  if   [ "$p" -ge 90 ]; then printf '%s' "$RED"
+  elif [ "$p" -ge 70 ]; then printf '%s' "$YELLOW"
+  else                       printf '%s' "$GREEN"
   fi
-
-  local color
-  if   [ "$pct" -ge 90 ]; then color="$RED"
-  elif [ "$pct" -ge 70 ]; then color="$YELLOW"
-  else                         color="$GREEN"
-  fi
-
-  local f='' e=''
-  [ "$filled" -gt 0 ] && { printf -v f "%${filled}s"; f="${f// /${fill_char}}"; }
-  [ "$empty"  -gt 0 ] && { printf -v e "%${empty}s";  e="${e// /${empty_char}}"; }
-  printf '%b' "${color}${f}${DIM}${e}${RESET}"
 }
 
 # ---------------------------------------------------------------------------
@@ -235,22 +229,17 @@ else
   printf '%s|%s' "$BRANCH" "$DIRTY" > "$GIT_CACHE"
 fi
 
-# ---------------------------------------------------------------------------
-# Cost color based on pre-computed level
-# ---------------------------------------------------------------------------
-case "$COST_LEVEL" in
-  high)   COST_COLOR="$RED"    ;;
-  normal) COST_COLOR="$YELLOW" ;;
-  *)      COST_COLOR="$DIM"    ;;
-esac
-
 SEP="${DIM}|${RESET}"
+DOT="${DIM}·${RESET}"
 
 # ---------------------------------------------------------------------------
-# Assemble Line 1
+# Line 1: [Model · CtxSize] | branch* +N/-M | dir | thinking | duration
 # ---------------------------------------------------------------------------
-BAR=$(render_bar "$PCT")
-LINE1="${CYAN}[${MODEL}]${RESET} ${BAR} ${PCT}%"
+if [ -n "$CTX_SIZE" ] && [ "$CTX_SIZE" != "0" ]; then
+  LINE1="${CYAN}[${MODEL} ${DIM}·${RESET}${CYAN} ${CTX_SIZE}]${RESET}"
+else
+  LINE1="${CYAN}[${MODEL}]${RESET}"
+fi
 
 if [ -n "$BRANCH" ]; then
   GIT_SEG="${I_BRANCH} ${GREEN}${BRANCH}${RESET}"
@@ -262,26 +251,51 @@ if [ -n "$BRANCH" ]; then
 fi
 
 LINE1="${LINE1} ${SEP} ${I_DIR} ${DIR}"
-LINE1="${LINE1} ${SEP} ${COST_COLOR}${COST_FMT}${RESET}"
+
+if [ -n "$EFFORT" ]; then
+  LINE1="${LINE1} ${SEP} ${I_THINK} ${EFFORT_COLOR}${EFFORT}${RESET}"
+fi
+
 LINE1="${LINE1} ${SEP} ${I_TIME} ${DUR_FMT}"
 
 # ---------------------------------------------------------------------------
-# Lines 2 and 3 — rate limits, shown only when Claude Code sends them
+# Line 2: token breakdown
+#   ctx 124k/1M (42%) · in 58k · read 60k · new 2k · out 4k
+# (hidden when current_usage is null — before first API call)
+# ---------------------------------------------------------------------------
+LINE2=""
+if [ -n "$T_USED" ] && [ "$T_USED" != "0" ]; then
+  LINE2="${DIM}ctx${RESET} ${PCT_COLOR}${T_USED}${RESET}${DIM}/${CTX_SIZE:-?}${RESET} ${DIM}(${RESET}${PCT_COLOR}${PCT}%${RESET}${DIM})${RESET}"
+  LINE2="${LINE2} ${DOT} ${DIM}in${RESET} ${T_IN}"
+  [ -n "$T_READ" ] && [ "$T_READ" != "0" ] && LINE2="${LINE2} ${DOT} ${DIM}read${RESET} ${T_READ}"
+  [ -n "$T_NEW" ]  && [ "$T_NEW"  != "0" ] && LINE2="${LINE2} ${DOT} ${DIM}new${RESET} ${T_NEW}"
+  [ -n "$T_OUT" ]  && [ "$T_OUT"  != "0" ] && LINE2="${LINE2} ${DOT} ${DIM}out${RESET} ${T_OUT}"
+else
+  # Pre-first-call placeholder
+  LINE2="${DIM}ctx 0/${CTX_SIZE:-?} (0%) · awaiting first response${RESET}"
+fi
+
+# ---------------------------------------------------------------------------
+# Line 3: rate limits combined
+#   current 28% ↻ 7:00pm | weekly 79% ↻ mar 10, 10:00am
+# ---------------------------------------------------------------------------
+LINE3=""
+if [ -n "$RL5_PCT" ]; then
+  RL5_COLOR=$(rl_color "$RL5_PCT")
+  LINE3="${DIM}current${RESET} ${RL5_COLOR}${RL5_PCT}%${RESET}"
+  [ -n "$RL5_RESET" ] && LINE3="${LINE3} ${DIM}${I_RESET} ${RL5_RESET}${RESET}"
+fi
+if [ -n "$RL7_PCT" ]; then
+  RL7_COLOR=$(rl_color "$RL7_PCT")
+  [ -n "$LINE3" ] && LINE3="${LINE3} ${SEP} "
+  LINE3="${LINE3}${DIM}weekly${RESET} ${RL7_COLOR}${RL7_PCT}%${RESET}"
+  [ -n "$RL7_RESET" ] && LINE3="${LINE3} ${DIM}${I_RESET} ${RL7_RESET}${RESET}"
+fi
+
+# ---------------------------------------------------------------------------
+# Emit
 # ---------------------------------------------------------------------------
 OUTPUT="$LINE1"
-
-if [ -n "$RL5_PCT" ]; then
-  BAR5=$(render_dot_bar "$RL5_PCT")
-  LINE2="${DIM}current${RESET} ${BAR5} ${RL5_PCT}%"
-  [ -n "$RL5_RESET" ] && LINE2="${LINE2}  ${DIM}${I_RESET} ${RL5_RESET}${RESET}"
-  OUTPUT="${OUTPUT}\n${LINE2}"
-fi
-
-if [ -n "$RL7_PCT" ]; then
-  BAR7=$(render_dot_bar "$RL7_PCT")
-  LINE3="${DIM}weekly ${RESET} ${BAR7} ${RL7_PCT}%"
-  [ -n "$RL7_RESET" ] && LINE3="${LINE3}  ${DIM}${I_RESET} ${RL7_RESET}${RESET}"
-  OUTPUT="${OUTPUT}\n${LINE3}"
-fi
-
+[ -n "$LINE2" ] && OUTPUT="${OUTPUT}\n${LINE2}"
+[ -n "$LINE3" ] && OUTPUT="${OUTPUT}\n${LINE3}"
 printf '%b' "$OUTPUT"

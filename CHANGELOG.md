@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-04-15
+
+### Changed (breaking display overhaul)
+- **Removed progress bar** on Line 1 — power users prefer numeric token detail over visual indicators.
+- **Removed Session Cost** (`$0.08`) — focus shifted to context management, not spend tracking.
+- **Line 2 is now a token breakdown** instead of a rate-limit row:
+  ```
+  ctx 120k/1M (42%) · in 58k · read 60k · new 2k · out 4k
+  ```
+  Numbers come from `context_window.current_usage.*` — sources: `input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens`.
+- **Line 3 now combines both rate-limit windows** on a single row:
+  ```
+  current 28% ↻ 7:00pm | weekly 79% ↻ mar 10, 10:00am
+  ```
+  Dot bars removed for density; the text color still reflects the 70%/90% thresholds.
+
+### Added
+- **Model context window badge** — `[Opus · 1M]` or `[Sonnet · 200k]` from `context_window.context_window_size`.
+- **Thinking Effort segment** — `🧠 high` / `🧠 medium` / `🧠 low` read from `~/.claude/settings.json` → `env.CLAUDE_CODE_EFFORT_LEVEL`. Segment hides when the field is absent or the file is missing.
+- **Human-readable token humanization** — values render as `58k`, `1.2M`, etc.
+- **"Awaiting first response" placeholder** for fresh sessions before `current_usage` is populated.
+
+### Technical
+- Added `os.homedir()` + `fs.existsSync()` checks inside the single node parse pass to load settings cross-platform.
+- Output field count bumped to 19 (was 14); `read` in bash widened with the new effort and token fields.
+- Script remains pure bash + one node invocation; no new runtime dependencies.
+
+---
+
 ## [1.1.0] — 2026-04-14
 
 ### Added
