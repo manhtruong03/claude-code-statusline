@@ -1,0 +1,21 @@
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+
+# Installer-generated backups
+settings.json.backup-*
+*.backup-*
+
+# Local testing
+/tmp/
+/test-output/
