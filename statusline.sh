@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# claude-code-statusline v1.2
+# claude-code-statusline v1.2.1
 #
 # Three-line status bar for Claude Code, designed for power users who want
 # detailed token management and rate-limit visibility instead of a progress bar:
 #
-#   Line 1: [Opus · 1M] | 🌿 branch* +150/-30 | 📁 project | 🧠 high | ⏰ 7m 3s
+#   Line 1: [Opus·1M·🧠H] | 🌿 branch* | 📁 project | ⏰ 87m
 #   Line 2: ctx 124k/1M (42%) · in 58k · read 60k · new 2k · out 4k
 #   Line 3: current 28% ↻ 7:00pm | weekly 79% ↻ mar 10, 10:00am
+#
+# Compact decisions:
+#   • Thinking Effort abbreviated to single letter (H/M/L) inside the badge.
+#   • Lines diff (+N/-M) removed — git status only shows branch + dirty flag.
+#   • Duration shown in minute resolution ("87m", "2h 15m") — never seconds.
 #
 # Line 3 appears only for Claude.ai Pro/Max subscribers (the only sessions
 # that receive `rate_limits.*` from Claude Code).
@@ -60,9 +65,19 @@ process.stdin.on("end", () => {
     const ctxSizeLabel = humanize(ctxSize);
 
     // --- Session / cost / duration ---------------------------------------
-    const durMs  = Number((o.cost && o.cost.total_duration_ms) || 0);
-    const durSec = Math.floor(durMs / 1000);
-    const durFmt = Math.floor(durSec / 60) + "m " + (durSec % 60) + "s";
+    // Duration — minute-resolution only; seconds are never displayed.
+    // < 60m  → "Xm"     (0m during the first minute)
+    // ≥ 60m  → "Xh Ym"  (or "Xh" when minutes are 0)
+    const durMs   = Number((o.cost && o.cost.total_duration_ms) || 0);
+    const durMins = Math.floor(durMs / 60000);
+    let durFmt;
+    if (durMins < 60) {
+      durFmt = durMins + "m";
+    } else {
+      const h = Math.floor(durMins / 60);
+      const m = durMins % 60;
+      durFmt = m === 0 ? h + "h" : h + "h " + m + "m";
+    }
 
     const linesAdd = Number((o.cost && o.cost.total_lines_added) || 0);
     const linesRem = Number((o.cost && o.cost.total_lines_removed) || 0);
@@ -138,9 +153,13 @@ IFS=$'\t' read -r MODEL CTX_SIZE DIR CWD PCT \
 
 # ---------------------------------------------------------------------------
 # ANSI colors
+#   GRAY replaces the old DIM (\033[2m) for structural chars — gives stable,
+#   readable contrast on both dark and light terminals. DIM is retained only
+#   for the fresh-session placeholder.
 # ---------------------------------------------------------------------------
 GREEN='\033[32m'; YELLOW='\033[33m'; RED='\033[31m'
 CYAN='\033[36m';  BLUE='\033[34m';   MAGENTA='\033[35m'
+GRAY='\033[38;5;245m'
 DIM='\033[2m';    BOLD='\033[1m';    RESET='\033[0m'
 
 # ---------------------------------------------------------------------------
@@ -163,12 +182,12 @@ else                         PCT_COLOR="$GREEN"
 fi
 
 # ---------------------------------------------------------------------------
-# Thinking effort → color (high = red/demanding, medium = yellow, low = dim)
+# Thinking effort → color (high = magenta, medium = yellow, low = gray)
 # ---------------------------------------------------------------------------
 case "$EFFORT" in
   high)   EFFORT_COLOR="$MAGENTA" ;;
   medium) EFFORT_COLOR="$YELLOW"  ;;
-  low)    EFFORT_COLOR="$DIM"     ;;
+  low)    EFFORT_COLOR="$GRAY"    ;;
   *)      EFFORT_COLOR=""         ;;
 esac
 
@@ -229,67 +248,66 @@ else
   printf '%s|%s' "$BRANCH" "$DIRTY" > "$GIT_CACHE"
 fi
 
-SEP="${DIM}|${RESET}"
-DOT="${DIM}·${RESET}"
+SEP="${GRAY}|${RESET}"
+DOT="${GRAY}·${RESET}"
 
 # ---------------------------------------------------------------------------
-# Line 1: [Model · CtxSize] | branch* +N/-M | dir | thinking | duration
+# Line 1: [Model · CtxSize · 🧠 effort] | branch* +N/-M | dir | duration
+# (Thinking Effort now lives inside the model badge for compactness)
 # ---------------------------------------------------------------------------
+LINE1="${CYAN}[${MODEL}${RESET}"
 if [ -n "$CTX_SIZE" ] && [ "$CTX_SIZE" != "0" ]; then
-  LINE1="${CYAN}[${MODEL} ${DIM}·${RESET}${CYAN} ${CTX_SIZE}]${RESET}"
-else
-  LINE1="${CYAN}[${MODEL}]${RESET}"
+  LINE1="${LINE1}${GRAY}·${RESET}${CYAN}${CTX_SIZE}${RESET}"
 fi
+if [ -n "$EFFORT" ]; then
+  # Compact effort to single uppercase initial (high → H, medium → M, low → L)
+  EFFORT_INITIAL=$(printf '%s' "$EFFORT" | head -c 1 | tr 'a-z' 'A-Z')
+  LINE1="${LINE1}${GRAY}·${RESET}${I_THINK}${EFFORT_COLOR}${EFFORT_INITIAL}${RESET}"
+fi
+LINE1="${LINE1}${CYAN}]${RESET}"
 
 if [ -n "$BRANCH" ]; then
   GIT_SEG="${I_BRANCH} ${GREEN}${BRANCH}${RESET}"
   [ -n "$DIRTY" ] && GIT_SEG="${GIT_SEG}${RED}${BOLD}*${RESET}"
-  if [ "$LINES_ADD" -gt 0 ] || [ "$LINES_REM" -gt 0 ]; then
-    GIT_SEG="${GIT_SEG} ${GREEN}+${LINES_ADD}${RESET}/${RED}-${LINES_REM}${RESET}"
-  fi
   LINE1="${LINE1} ${SEP} ${GIT_SEG}"
 fi
 
 LINE1="${LINE1} ${SEP} ${I_DIR} ${DIR}"
-
-if [ -n "$EFFORT" ]; then
-  LINE1="${LINE1} ${SEP} ${I_THINK} ${EFFORT_COLOR}${EFFORT}${RESET}"
-fi
-
 LINE1="${LINE1} ${SEP} ${I_TIME} ${DUR_FMT}"
 
 # ---------------------------------------------------------------------------
 # Line 2: token breakdown
 #   ctx 124k/1M (42%) · in 58k · read 60k · new 2k · out 4k
+# Labels in normal weight; only separators and the "/" use gray for structure.
 # (hidden when current_usage is null — before first API call)
 # ---------------------------------------------------------------------------
 LINE2=""
 if [ -n "$T_USED" ] && [ "$T_USED" != "0" ]; then
-  LINE2="${DIM}ctx${RESET} ${PCT_COLOR}${T_USED}${RESET}${DIM}/${CTX_SIZE:-?}${RESET} ${DIM}(${RESET}${PCT_COLOR}${PCT}%${RESET}${DIM})${RESET}"
-  LINE2="${LINE2} ${DOT} ${DIM}in${RESET} ${T_IN}"
-  [ -n "$T_READ" ] && [ "$T_READ" != "0" ] && LINE2="${LINE2} ${DOT} ${DIM}read${RESET} ${T_READ}"
-  [ -n "$T_NEW" ]  && [ "$T_NEW"  != "0" ] && LINE2="${LINE2} ${DOT} ${DIM}new${RESET} ${T_NEW}"
-  [ -n "$T_OUT" ]  && [ "$T_OUT"  != "0" ] && LINE2="${LINE2} ${DOT} ${DIM}out${RESET} ${T_OUT}"
+  LINE2="ctx ${BOLD}${PCT_COLOR}${T_USED}${RESET}${GRAY}/${CTX_SIZE:-?}${RESET} ${GRAY}(${PCT_COLOR}${PCT}%${GRAY})${RESET}"
+  LINE2="${LINE2} ${DOT} in ${T_IN}"
+  [ -n "$T_READ" ] && [ "$T_READ" != "0" ] && LINE2="${LINE2} ${DOT} read ${T_READ}"
+  [ -n "$T_NEW" ]  && [ "$T_NEW"  != "0" ] && LINE2="${LINE2} ${DOT} new ${T_NEW}"
+  [ -n "$T_OUT" ]  && [ "$T_OUT"  != "0" ] && LINE2="${LINE2} ${DOT} out ${T_OUT}"
 else
-  # Pre-first-call placeholder
-  LINE2="${DIM}ctx 0/${CTX_SIZE:-?} (0%) · awaiting first response${RESET}"
+  LINE2="${GRAY}ctx 0/${CTX_SIZE:-?} (0%) · awaiting first response${RESET}"
 fi
 
 # ---------------------------------------------------------------------------
 # Line 3: rate limits combined
 #   current 28% ↻ 7:00pm | weekly 79% ↻ mar 10, 10:00am
+# Labels & reset times in normal weight; arrows in gray.
 # ---------------------------------------------------------------------------
 LINE3=""
 if [ -n "$RL5_PCT" ]; then
   RL5_COLOR=$(rl_color "$RL5_PCT")
-  LINE3="${DIM}current${RESET} ${RL5_COLOR}${RL5_PCT}%${RESET}"
-  [ -n "$RL5_RESET" ] && LINE3="${LINE3} ${DIM}${I_RESET} ${RL5_RESET}${RESET}"
+  LINE3="current ${BOLD}${RL5_COLOR}${RL5_PCT}%${RESET}"
+  [ -n "$RL5_RESET" ] && LINE3="${LINE3} ${GRAY}${I_RESET}${RESET} ${RL5_RESET}"
 fi
 if [ -n "$RL7_PCT" ]; then
   RL7_COLOR=$(rl_color "$RL7_PCT")
   [ -n "$LINE3" ] && LINE3="${LINE3} ${SEP} "
-  LINE3="${LINE3}${DIM}weekly${RESET} ${RL7_COLOR}${RL7_PCT}%${RESET}"
-  [ -n "$RL7_RESET" ] && LINE3="${LINE3} ${DIM}${I_RESET} ${RL7_RESET}${RESET}"
+  LINE3="${LINE3}weekly ${BOLD}${RL7_COLOR}${RL7_PCT}%${RESET}"
+  [ -n "$RL7_RESET" ] && LINE3="${LINE3} ${GRAY}${I_RESET}${RESET} ${RL7_RESET}"
 fi
 
 # ---------------------------------------------------------------------------

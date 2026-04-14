@@ -10,13 +10,13 @@ Detailed token breakdown, model context size, thinking effort, git state, and Pr
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](#install)
 [![Shell](https://img.shields.io/badge/shell-bash-4EAA25?logo=gnubash&logoColor=white)](#)
 [![Runtime](https://img.shields.io/badge/runtime-Node.js-339933?logo=nodedotjs&logoColor=white)](#)
-[![Version](https://img.shields.io/badge/version-1.2.0-8A2BE2)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.1-8A2BE2)](./CHANGELOG.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 ```text
-[Opus · 1M] | 🌿 main* +150/-30 | 📁 OfficeOS | 🧠 high | ⏰ 7m 3s
-ctx 120k/1M (42%) · in 58k · read 60k · new 2k · out 4k
-current 28% ↻ 7:00pm | weekly 79% ↻ mar 10, 10:00am
+[Opus·1M·🧠H] | 🌿 main* | 📁 OfficeOS | ⏰ 87m
+ctx 268k/1M (25%) · in 1 · read 267k · new 818 · out 539
+current 1% ↻ 4:31am | weekly 38% ↻ apr 20, 12:31am
 ```
 
 </div>
@@ -27,7 +27,7 @@ current 28% ↻ 7:00pm | weekly 79% ↻ mar 10, 10:00am
 
 Claude Code's default status line is informative but silent on what power users need most during long coding sessions: **how is my context being spent, how much is cached vs. fresh, how close am I to my rate limits, and which thinking effort am I running?**
 
-`claude-code-statusline` surfaces all of that in three compact lines — token breakdown by type (`in` / `read` / `new` / `out`), model context window size (`1M` or `200k`), **Thinking Effort** from your settings, **dirty-branch indicator**, **lines-changed counters**, and **5-hour / 7-day rate-limit quotas** with human-friendly reset times. It installs with a single command and has **zero runtime dependencies** beyond the `node` binary that Claude Code already ships.
+`claude-code-statusline` surfaces all of that in three compact lines — token breakdown by type (`in` / `read` / `new` / `out`), model context window size (`1M` or `200k`), **Thinking Effort** badge, **dirty-branch indicator**, and **5-hour / 7-day rate-limit quotas** with human-friendly reset times. It installs with a single command and has **zero runtime dependencies** beyond the `node` binary that Claude Code already ships.
 
 ## Features
 
@@ -35,12 +35,10 @@ Claude Code's default status line is informative but silent on what power users 
 
 | | |
 |---|---|
-| 🎯 **Model + context size** | `[Opus · 1M]` — short model name plus context window (`1M` / `200k`) from `context_window.context_window_size` |
+| 🎯 **Model + context + effort badge** | `[Opus·1M·🧠H]` — model name, context window size (`1M` / `200k`), and Thinking Effort initial (`H`/`M`/`L`) all in one compact bracket |
 | 🌿 **Dirty branch indicator** | `main*` in red when uncommitted changes are detected |
-| 📝 **Lines changed** | `+150/-30` from `cost.total_lines_added/removed`; hidden when both are zero |
 | 📁 **Project basename** | Clean `workspace.current_dir` basename, no noisy full paths |
-| 🧠 **Thinking Effort** | Read from `~/.claude/settings.json` → `env.CLAUDE_CODE_EFFORT_LEVEL` — magenta for `high`, yellow `medium`, dim `low` |
-| ⏰ **Elapsed time** | `Xm Ys` from `cost.total_duration_ms` |
+| ⏰ **Elapsed time** | Minute-resolution — `87m` or `2h 15m`, never seconds |
 
 ### Line 2 — token breakdown
 
@@ -79,26 +77,26 @@ If `read` dominates, caching is working well. If `new` is high, Claude is buildi
 
 ### Active Pro/Max session, healthy context
 ```
-[Opus · 1M] | 🌿 main* +150/-30 | 📁 OfficeOS | 🧠 high | ⏰ 7m 3s
-ctx 120k/1M (42%) · in 58k · read 60k · new 2k · out 4k
-current 28% ↻ 7:00pm | weekly 79% ↻ mar 10, 10:00am
+[Opus·1M·🧠H] | 🌿 main* | 📁 OfficeOS | ⏰ 87m
+ctx 268k/1M (25%) · in 1 · read 267k · new 818 · out 539
+current 1% ↻ 4:31am | weekly 38% ↻ apr 20, 12:31am
 ```
 
 ### Fresh session (before first API call)
 ```
-[Opus · 1M] | 🌿 main | 📁 my-app | 🧠 high | ⏰ 0m 0s
+[Opus·1M·🧠H] | 🌿 main | 📁 my-app | ⏰ 0m
 ctx 0/1M (0%) · awaiting first response
 ```
 
 ### Free tier, 200k context, cache-heavy turn
 ```
-[Sonnet · 200k] | 🌿 main* | 📁 my-app | 🧠 high | ⏰ 1m 0s
+[Sonnet·200k·🧠M] | 🌿 main* | 📁 my-app | ⏰ 1m
 ctx 170k/200k (85%) · in 120k · read 50k · out 3k
 ```
 
 ### Critical context, long session, cache working well
 ```
-[Opus · 1M] | 🌿 feature/auth* +820/-340 | 📁 core | 🧠 high | ⏰ 45m 12s
+[Opus·1M·🧠H] | 🌿 feature/auth* | 📁 core | ⏰ 45m
 ctx 950k/1M (95%) · in 15k · read 920k · new 15k · out 8k
 current 92% ↻ 3:15pm | weekly 71% ↻ apr 21, 9:00am
 ```
@@ -106,7 +104,7 @@ current 92% ↻ 3:15pm | weekly 71% ↻ apr 21, 9:00am
 
 ### ASCII-only mode (CI / limited terminals)
 ```
-[Opus · 1M] | [B] main* +150/-30 | [D] OfficeOS | [E] high | [T] 7m 3s
+[Opus·1M·[E]H] | [B] main* | [D] OfficeOS | [T] 87m
 ctx 120k/1M (42%) · in 58k · read 60k · new 2k · out 4k
 current 28% -> 7:00pm | weekly 79% -> mar 10, 10:00am
 ```
@@ -233,19 +231,18 @@ Claude Code pipes a JSON payload to your configured command on stdin every time 
 
 | JSON path                                              | Rendered as                            |
 |--------------------------------------------------------|----------------------------------------|
-| `model.display_name`                                   | `[Opus]` (first word, cyan)            |
-| `context_window.context_window_size`                   | `· 1M]` / `· 200k]` badge              |
-| `context_window.used_percentage`                       | `(42%)` inside Line 2                  |
-| `context_window.current_usage.input_tokens`            | `in 58k`                               |
-| `context_window.current_usage.cache_read_input_tokens` | `read 60k`                             |
-| `context_window.current_usage.cache_creation_input_tokens` | `new 2k`                           |
-| `context_window.current_usage.output_tokens`           | `out 4k`                               |
+| `model.display_name`                                   | `Opus` (first word) inside cyan badge  |
+| `context_window.context_window_size`                   | `·1M` / `·200k` inside badge           |
+| `~/.claude/settings.json` → `env.CLAUDE_CODE_EFFORT_LEVEL` | `·🧠H` / `·🧠M` / `·🧠L` inside badge |
+| `context_window.used_percentage`                       | `(25%)` inside Line 2                  |
+| `context_window.current_usage.input_tokens`            | `in 1`                                 |
+| `context_window.current_usage.cache_read_input_tokens` | `read 267k`                            |
+| `context_window.current_usage.cache_creation_input_tokens` | `new 818`                          |
+| `context_window.current_usage.output_tokens`           | `out 539`                              |
 | `workspace.current_dir`                                | `📁 OfficeOS` (basename only)          |
-| `cost.total_duration_ms`                               | `⏰ 7m 3s`                             |
-| `cost.total_lines_added` / `total_lines_removed`       | `+150/-30` (green/red, zero-hide)      |
-| `rate_limits.five_hour.used_percentage` + `resets_at`  | `current 28% ↻ 7:00pm`                 |
-| `rate_limits.seven_day.used_percentage` + `resets_at`  | `weekly 79% ↻ mar 10, 10:00am`         |
-| `~/.claude/settings.json` → `env.CLAUDE_CODE_EFFORT_LEVEL` | `🧠 high` (magenta/yellow/dim)     |
+| `cost.total_duration_ms`                               | `⏰ 87m` / `⏰ 2h 15m` (minute only)   |
+| `rate_limits.five_hour.used_percentage` + `resets_at`  | `current 1% ↻ 4:31am`                  |
+| `rate_limits.seven_day.used_percentage` + `resets_at`  | `weekly 38% ↻ apr 20, 12:31am`         |
 | *(from `.git/HEAD` + `git status --porcelain`)*        | `🌿 main*` (dirty-aware, 5s cached)    |
 
 Full JSON schema in the [official status line docs](https://code.claude.com/docs/en/statusline#available-data).
@@ -259,8 +256,7 @@ Full JSON schema in the [official status line docs](https://code.claude.com/docs
 | Thinking Effort display         | ✅ | ❌ | ✅ | ❌ |
 | Rate-limit dashboard            | ✅ | ✅ | ✅ | ✅ |
 | Dirty branch indicator          | ✅ | ✅ | ✅ | ✅ |
-| Lines diff `+N/-M`              | ✅ | ❌ | ❌ | ✅ |
-| Human reset time (`7:00pm`)     | ✅ | ✅ | ❌ | ❌ |
+| Human reset time (`4:31am`)     | ✅ | ✅ | ❌ | ❌ |
 | Cross-platform installer        | ✅ | ✅ | ✅ | ❌ |
 | Zero runtime deps (no jq/python)| ✅ | ❌ | ❌ | ❌ |
 | Single-file readable bash       | ✅ | ❌ | ❌ | ✅ |
@@ -321,6 +317,7 @@ This project uses `context_window.current_usage` from the most recent API call. 
 
 See [CHANGELOG.md](./CHANGELOG.md) for the full release history. Latest highlights:
 
+- **v1.2.1** — Compact refinements: effort shortened to 1-letter initial, lines diff removed, minute-only duration, color hierarchy rebalance (gray separators, bold primary numbers)
 - **v1.2.0** — Token-detail redesign: breakdown (in/read/new/out), model context size badge, Thinking Effort, rate limits combined on one line; removed progress bar & cost
 - **v1.1.0** — Three-line layout, truecolor gradient, rate limits, dirty branch, lines diff, ENV-driven theming
 - **v1.0.0** — Initial two-line release

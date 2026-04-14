@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] — 2026-04-15
+
+### Changed
+- **Color hierarchy rebalanced** — replaced overused `\033[2m` (dim, ~50% opacity) with explicit 8-bit gray `\033[38;5;245m` for structural characters only (`|`, `·`, `↻`, `/`, `()`). Labels (`ctx`, `in`, `read`, `new`, `out`, `current`, `weekly`) and reset times are now rendered in normal weight for much better contrast on dark terminals.
+- **Primary numbers emphasized** — `ctx` total, context `%`, and rate-limit `%` now rendered **bold + threshold color** to establish clear visual hierarchy over supporting detail.
+- **Thinking Effort merged into the model badge** — `[Opus · 1M] | ... | 🧠 high | ...` → `[Opus·1M·🧠H] | ...`. Shaves a full segment from Line 1.
+- **Thinking Effort shortened to single-letter initial** — `high` → `H` (magenta), `medium` → `M` (yellow), `low` → `L` (gray). Frees ~4 cells while preserving semantic colour.
+- **Badge spacing tightened** — removed whitespace around the `·` separators inside `[…]` (was `Opus · 1M · 🧠 high`, now `Opus·1M·🧠H`). Saves 4 cells.
+- **Duration format — minute-only** — `cost.total_duration_ms` now always renders at minute resolution. `<60m` → `Xm` (displays `0m` during the first minute), `≥60m` → `Xh Ym` (or `Xh` when minutes are zero). Seconds are never displayed.
+- **Low effort color** — `low` effort now uses gray (245) instead of `\033[2m` dim, so it stays readable on dark terminals.
+
+### Removed
+- **Lines diff (`+150/-30`) segment** removed from Line 1. Branch segment now shows only `🌿 branch` + dirty `*`. Reduces Line 1 length substantially and avoids noise on branches with large diffs.
+
+### Impact
+- **Line 1 length**: ~92 cells → ~68 cells on a typical session (−26%). Fits comfortably in 80-column terminals even with long branch names.
+- No functional dependencies changed. Still pure bash + single `node` pass.
+
+---
+
 ## [1.2.0] — 2026-04-15
 
 ### Changed (breaking display overhaul)
