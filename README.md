@@ -2,19 +2,21 @@
 
 # claude-code-statusline
 
-**A beautiful, cross-platform two-line status bar for [Claude Code](https://code.claude.com).**
+**A beautiful, feature-rich three-line status bar for [Claude Code](https://code.claude.com).**
 
-At-a-glance visibility into your model, working directory, git branch, context usage, session cost, and elapsed time — without ever leaving your terminal.
+At-a-glance visibility into your model, context usage, git state, session cost, elapsed time, and Pro/Max rate limits — all without leaving your terminal.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](#install)
 [![Shell](https://img.shields.io/badge/shell-bash-4EAA25?logo=gnubash&logoColor=white)](#)
 [![Runtime](https://img.shields.io/badge/runtime-Node.js-339933?logo=nodedotjs&logoColor=white)](#)
+[![Version](https://img.shields.io/badge/version-1.1.0-8A2BE2)](./CHANGELOG.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 ```text
-[Opus] 📁 OfficeOS | 🌿 main
-████░░░░░░ 42% | $0.08 | ⏰ 7m 3s
+[Opus] ████░░░░░░ 42% | 🌿 main* +150/-30 | 📁 OfficeOS | $0.08 | ⏰ 7m 3s
+current ●●●○○○○○○○ 28%  ↻ 7:00pm
+weekly  ●●●●●●●○○○ 79%  ↻ mar 10, 10:00am
 ```
 
 </div>
@@ -23,42 +25,69 @@ At-a-glance visibility into your model, working directory, git branch, context u
 
 ## Why
 
-Claude Code's default status line is informative but silent on the things that matter most during long coding sessions: **how full is my context window, how much am I spending, and how long have I been going?**
+Claude Code's default status line is informative but silent on the things that matter most during long coding sessions: **how full is my context, how dirty is my branch, how much am I spending, and how close am I to my rate limits?**
 
-`claude-code-statusline` surfaces all of that — with a color-coded progress bar, cost tracker, and live duration — in **two compact lines** that fit any terminal. It works identically on Windows (Git Bash), macOS, and Linux, and installs with a single command.
+`claude-code-statusline` surfaces all of that — with a **true-color gradient** context bar, **dirty-branch indicator**, **lines-changed counters**, **cost tracker**, and **5-hour / 7-day rate-limit quotas** with human-friendly reset times — across three compact lines that work on any terminal. It installs with a single command and has **zero runtime dependencies** beyond the `node` binary that Claude Code already ships.
 
 ## Features
 
+### Line 1 — live session snapshot
+
 | | |
 |---|---|
-| 🎯 **Context window usage** — | 10-char progress bar with threshold colors (green / yellow / red) |
-| 💰 **Session cost tracking** — | Live `$0.00` formatted USD from Claude Code's cost stream |
-| ⏰ **Elapsed time** — | `Xm Ys` since the session started |
-| 🌿 **Git branch** — | Read directly from `.git/HEAD`, no `git` subprocess spawned |
-| 📁 **Smart project name** — | Basename of `workspace.current_dir` (clean, readable) |
-| 🎨 **Model badge** — | Short model name (e.g. `Opus`) in a cyan pill |
-| ⚡ **Fast** — | No `jq` dependency, no `git` spawns — runs in milliseconds |
-| 🔧 **Zero-config install** — | Auto-detects OS and wires `settings.json` for you |
-| 🔁 **Optional live refresh** — | One flag for a ticking duration clock |
+| 🎨 **True-color gradient bar** | 24-bit green→yellow→red gradient across the filled segment; auto-falls back to solid threshold colors on 256-color terminals |
+| 🌿 **Dirty branch indicator** | `main*` in red when uncommitted changes are detected |
+| 📝 **Lines changed** | `+150/-30` from `cost.total_lines_added/removed`; hidden when both are zero |
+| 💰 **Smart cost color** | Dim at `$0.00`, yellow normal, red when `>$10` |
+| ⏰ **Elapsed time** | `Xm Ys` from `cost.total_duration_ms` |
+| 📁 **Project basename** | Clean `workspace.current_dir` basename, no noisy full paths |
+| 🎯 **Short model badge** | First word of `model.display_name` (`Opus`, `Sonnet`, `Haiku`) |
+
+### Lines 2 & 3 — rate-limit dashboard (Pro/Max only)
+
+| | |
+|---|---|
+| 🕐 **5-hour rolling window** | `current` row with color-coded dot bar + percentage + reset time |
+| 📆 **7-day rolling window** | `weekly` row with color-coded dot bar + percentage + reset time |
+| ⏱ **Smart reset formatting** | `7:00pm` if reset today, else `mar 10, 10:00am` |
+| 👻 **Auto-hide for free users** | Rows vanish entirely when `rate_limits` is absent from the payload |
+
+### Engineering
+
+| | |
+|---|---|
+| ⚡ **Fast** | ~50ms typical runtime — single `node` JSON parse, no subprocess fan-out |
+| 🪶 **Zero dependencies** | No `jq`, no `python`, no `git` required on `PATH` — only `node` (bundled with Claude Code) |
+| 🧠 **Git caching** | `git status --porcelain` cached 5s per session to avoid lag on big repos |
+| 🛟 **Graceful fallback** | Reads `.git/HEAD` directly if `git` is missing |
+| 🎛 **ENV-driven theming** | Swap between emoji / Nerd Font / pure ASCII with one environment variable |
 
 ## Preview
 
-**Low context usage** — bar in green
+### Active Pro/Max session
 ```
-[Opus] 📁 OfficeOS | 🌿 kaopiz
-████░░░░░░ 42% | $0.08 | ⏰ 7m 3s
-```
-
-**High context usage** — bar switches to yellow at 70%+
-```
-[Sonnet] 📁 my-app | 🌿 feature/auth
-████████░░ 85% | $1.23 | ⏰ 62m 3s
+[Opus] ████░░░░░░ 42% | 🌿 main* +150/-30 | 📁 OfficeOS | $0.08 | ⏰ 7m 3s
+current ●●●○○○○○○○ 28%  ↻ 7:00pm
+weekly  ●●●●●●●○○○ 79%  ↻ mar 10, 10:00am
 ```
 
-**Critical context** — bar turns red at 90%+
+### Fresh session, free tier (no rate limits)
 ```
-[Opus] 📁 OfficeOS | 🌿 main
-█████████░ 95% | $2.50 | ⏰ 10m 0s
+[Sonnet] ░░░░░░░░░░ 0% | 🌿 main | 📁 my-app | $0.00 | ⏰ 0m 0s
+```
+
+### Critical context + hot wallet (90%+ usage, >$10 spend)
+```
+[Opus] █████████░ 95% | 🌿 feature/auth* +820/-340 | 📁 core | $12.80 | ⏰ 45m 12s
+current ●●●●●●●●●○ 92%  ↻ 3:15pm
+weekly  ●●●●●●●○○○ 71%  ↻ apr 21, 9:00am
+```
+
+### ASCII-only mode (CI / limited terminals)
+```
+[Opus] ####------ 42% | [B] main* +150/-30 | [D] OfficeOS | $0.08 | [T] 7m 3s
+current ** ........ 28%  -> 7:00pm
+weekly  *******... 79%  -> mar 10, 10:00am
 ```
 
 ## Install
@@ -71,7 +100,7 @@ cd claude-code-statusline
 bash install.sh
 ```
 
-Then restart Claude Code. That's it.
+Then restart Claude Code.
 
 The installer:
 - Detects your OS (Windows Git Bash / macOS / Linux)
@@ -81,7 +110,8 @@ The installer:
 
 ### Manual install
 
-If you'd rather wire it up yourself:
+<details>
+<summary>Click for manual wiring</summary>
 
 ```bash
 # 1. Copy the script
@@ -104,6 +134,7 @@ chmod +x ~/.claude/statusline.sh
   }
 }
 ```
+</details>
 
 ### Uninstall
 
@@ -114,6 +145,20 @@ bash install.sh --uninstall
 Removes `~/.claude/statusline.sh` and the `statusLine` block from `settings.json`, leaving all other settings intact.
 
 ## Configuration
+
+All configuration happens through environment variables — no config file to maintain.
+
+| Variable | Effect |
+|---|---|
+| `COLORTERM=truecolor` | Enable 24-bit gradient bar (most modern terminals set this automatically) |
+| `CLAUDE_STATUSLINE_ASCII=1` | Plain ASCII mode — no emoji, no Unicode block characters |
+| `CLAUDE_STATUSLINE_NERDFONT=1` | Swap emoji icons for [Nerd Font](https://www.nerdfonts.com/) glyphs |
+
+Set any of these in your shell profile before launching Claude Code, for example:
+
+```bash
+export CLAUDE_STATUSLINE_NERDFONT=1   # in ~/.bashrc or ~/.zshrc
+```
 
 ### Live duration ticker
 
@@ -129,38 +174,61 @@ By default, the status line updates after each assistant message. To make the `�
 }
 ```
 
-### Customize thresholds or colors
+### Customize colors or thresholds
 
-Open `~/.claude/statusline.sh` and tweak these sections — they're commented inline:
+Open `~/.claude/statusline.sh` — the interesting sections are clearly commented:
 
-- **Bar thresholds** — currently `<70%` green, `70–89%` yellow, `≥90%` red
-- **Bar width** — `BAR_WIDTH=10` (change to 20 for a wider bar)
-- **Icons** — `📁` `🌿` `⏰` (swap for any Unicode / Nerd Font glyph)
+- **Bar thresholds** — `<70%` green, `70–89%` yellow, `≥90%` red (fallback mode)
+- **Gradient stops** — green `(0,200,0)` → yellow `(255,255,0)` → red `(255,50,50)`
+- **Bar width** — `width=10` (bump to 20 for a wider bar)
+- **Cost levels** — `zero` / `normal` / `high` boundaries in the node parsing block
 
 ## Requirements
 
-- **[Claude Code](https://code.claude.com)** — ships with `node`, which the script uses for JSON parsing
+- **[Claude Code](https://code.claude.com)** — provides the `node` binary used internally
 - **Bash**
-  - **Windows** — Git Bash (comes with [Git for Windows](https://git-scm.com/download/win), which Claude Code already requires)
-  - **macOS / Linux** — the default shell works
-- **A terminal with ANSI color + emoji support** — Windows Terminal, iTerm2, Alacritty, WezTerm, Kitty, GNOME Terminal, etc.
+  - **Windows** — [Git Bash](https://git-scm.com/download/win) (bundled with Git for Windows, already required by Claude Code)
+  - **macOS / Linux** — default shell
+- **A terminal with ANSI color + emoji support**
+  - Best: iTerm2, Alacritty, WezTerm, Kitty, Windows Terminal
+  - Truecolor-capable: all of the above (auto-detected via `$COLORTERM`)
 
-No `jq`, no `python`, no `git` needed on `PATH`. The script reads `.git/HEAD` directly.
+No `jq`, no `python`, no `git` required on `PATH`.
 
 ## How it works
 
-Claude Code pipes a JSON payload to the configured command on stdin every time the status line updates (after each assistant message, on permission-mode change, on vim-mode toggle, or on a `refreshInterval` tick). The script parses that JSON with `node` and extracts:
+Claude Code pipes a JSON payload to your configured command on stdin every time the status line updates (after each assistant message, on permission-mode change, on vim-mode toggle, or on a `refreshInterval` tick). The script extracts these fields:
 
-| JSON field                              | Displayed as           |
-|-----------------------------------------|------------------------|
-| `model.display_name`                    | `[Opus]` (first word)  |
-| `workspace.current_dir`                 | `📁 OfficeOS`          |
-| `context_window.used_percentage`        | Progress bar + `42%`   |
-| `cost.total_cost_usd`                   | `$0.08`                |
-| `cost.total_duration_ms`                | `⏰ 7m 3s`             |
-| *(from `.git/HEAD` of the cwd's repo)*  | `🌿 main`              |
+| JSON path                                         | Rendered as                        |
+|---------------------------------------------------|------------------------------------|
+| `model.display_name`                              | `[Opus]` (first word, cyan)        |
+| `workspace.current_dir`                           | `📁 OfficeOS` (basename only)      |
+| `context_window.used_percentage`                  | Gradient bar + `42%`               |
+| `cost.total_cost_usd`                             | `$0.08` (color by level)           |
+| `cost.total_duration_ms`                          | `⏰ 7m 3s`                         |
+| `cost.total_lines_added` / `total_lines_removed`  | `+150/-30` (green/red, zero-hide)  |
+| `rate_limits.five_hour.used_percentage`           | `current ●●●○○○○○○○ 28%`           |
+| `rate_limits.five_hour.resets_at`                 | `↻ 7:00pm` / `↻ mar 10, 10:00am`   |
+| `rate_limits.seven_day.*`                         | `weekly` row, same format          |
+| *(from `.git/HEAD` + `.git/index`)*               | `🌿 main*` (dirty-aware)           |
 
-Full schema in the [official status line docs](https://code.claude.com/docs/en/statusline#available-data).
+Full JSON schema in the [official status line docs](https://code.claude.com/docs/en/statusline#available-data).
+
+## Comparison with similar projects
+
+| | this repo | [kamranahmedse](https://github.com/kamranahmedse/claude-statusline) | [ccstatusline](https://github.com/sirmalloc/ccstatusline) | [kcchien](https://github.com/kcchien/claude-code-statusline) |
+|---|:---:|:---:|:---:|:---:|
+| Rate-limit dashboard            | ✅ | ✅ | ✅ | ✅ |
+| Truecolor gradient bar          | ✅ | ❌ | ❌ | ✅ |
+| Dirty branch indicator          | ✅ | ✅ | ✅ | ✅ |
+| Lines diff `+N/-M`              | ✅ | ❌ | ❌ | ✅ |
+| Human reset time (`7:00pm`)     | ✅ | ✅ | ❌ | ❌ |
+| Cross-platform installer        | ✅ | ✅ | ✅ | ❌ |
+| Zero runtime deps (no jq/python)| ✅ | ❌ | ❌ | ❌ |
+| Single-file readable bash       | ✅ | ❌ | ❌ | ✅ |
+| Powerline / themes              | ❌ | ❌ | ✅ | ✅ |
+
+This project prioritizes **zero-dependency**, **single-file hackability**, and **cross-platform parity**.
 
 ## Troubleshooting
 
@@ -174,10 +242,33 @@ Full schema in the [official status line docs](https://code.claude.com/docs/en/s
 </details>
 
 <details>
+<summary><b>Rate-limit rows don't appear</b></summary>
+
+The `rate_limits` object is only populated for **Claude.ai Pro/Max subscribers** after the first API response in a session. Free users will only ever see Line 1. This is a Claude Code design choice, not a bug in this project.
+</details>
+
+<details>
 <summary><b>Emojis render as boxes or tofu</b></summary>
 
-- Windows: make sure your terminal font includes emoji glyphs — [Cascadia Code](https://github.com/microsoft/cascadia-code) or any [Nerd Font](https://www.nerdfonts.com/) works
+- Windows: install [Cascadia Code](https://github.com/microsoft/cascadia-code) or a [Nerd Font](https://www.nerdfonts.com/) that includes emoji glyphs
 - Ensure your terminal is set to UTF-8 output
+- Or set `CLAUDE_STATUSLINE_ASCII=1` to disable emoji entirely
+</details>
+
+<details>
+<summary><b>Gradient bar shows as flat color</b></summary>
+
+Your terminal doesn't advertise 24-bit color support via `$COLORTERM`. Set it manually:
+```bash
+export COLORTERM=truecolor
+```
+Or use `CLAUDE_STATUSLINE_NERDFONT=1` / default emoji mode — both still look great with threshold colors.
+</details>
+
+<details>
+<summary><b>Dirty indicator is wrong / stale</b></summary>
+
+Git status is cached 5 seconds per session (file at `$TMPDIR/cc-statusline-git-<session_id>`). Delete that file to force a refresh, or wait 5 seconds for the next invocation.
 </details>
 
 <details>
@@ -186,23 +277,24 @@ Full schema in the [official status line docs](https://code.claude.com/docs/en/s
 That's correct — `context_window.used_percentage` is `null` until the first API response lands. After the first message it populates and updates on every turn.
 </details>
 
-<details>
-<summary><b>I use Fish / Zsh / something else — will this work?</b></summary>
+## Changelog
 
-The **installer** needs bash to run once. After install, the status line itself is invoked by Claude Code, which runs it through bash (on every platform) — so your interactive shell doesn't matter.
-</details>
+See [CHANGELOG.md](./CHANGELOG.md) for the full release history. Latest highlights:
+
+- **v1.1.0** — Three-line layout, truecolor gradient, rate limits, dirty branch, lines diff, ENV-driven theming
+- **v1.0.0** — Initial two-line release
 
 ## Contributing
 
 PRs and issues very welcome. A few ideas on the wishlist:
 
-- [ ] Optional `session_name` display when set via `/rename`
-- [ ] Rate-limit usage segment (`5h: 23% | 7d: 41%`) for Pro/Max users
-- [ ] Themeable color palettes (Dracula / Solarized / Nord)
-- [ ] Nerd Font icon variants
 - [ ] PowerShell port for non-Git-Bash Windows users
+- [ ] Session name display when set via `/rename`
+- [ ] Agent-active indicator when `agent.name` is present
+- [ ] Worktree badge when `workspace.git_worktree` is set
+- [ ] More theme presets (Dracula / Solarized / Nord gradient stops)
 
-Before submitting, please test the installer on at least one OS:
+Before submitting, please test on at least one OS:
 
 ```bash
 bash install.sh
@@ -211,7 +303,11 @@ bash install.sh --uninstall
 
 ## Credits
 
-Inspired by the official [Claude Code status line documentation](https://code.claude.com/docs/en/statusline) and the [`ccstatusline`](https://github.com/sirmalloc/ccstatusline) and [`starship-claude`](https://github.com/martinemde/starship-claude) community projects.
+Inspired by the official [Claude Code status line documentation](https://code.claude.com/docs/en/statusline) and these excellent community projects:
+
+- [`kamranahmedse/claude-statusline`](https://github.com/kamranahmedse/claude-statusline) — rate-limit dashboard layout
+- [`sirmalloc/ccstatusline`](https://github.com/sirmalloc/ccstatusline) — widget architecture & token metrics
+- [`kcchien/claude-code-statusline`](https://github.com/kcchien/claude-code-statusline) — truecolor gradient + smart hiding
 
 ## License
 
