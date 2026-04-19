@@ -80,12 +80,14 @@ describe("xhigh model-aware normalization", () => {
     assert.equal(fields.effortLabel, "Mx");
   });
 
-  test("xhigh on Haiku → Mx", () => {
-    const fields = parseFields(
-      JSON.stringify(makePayload({ model: { display_name: "Claude Haiku 4" } })),
-      "xhigh"
-    );
-    assert.equal(fields.effortLabel, "Mx");
+  test("any effort on Haiku → hidden (Haiku has no effort setting)", () => {
+    for (const level of ["low", "medium", "high", "xhigh", "max", "4", "6"]) {
+      const fields = parseFields(
+        JSON.stringify(makePayload({ model: { display_name: "Claude Haiku 4" } })),
+        level
+      );
+      assert.equal(fields.effortLabel, "", `Haiku+${level} should be hidden`);
+    }
   });
 });
 

@@ -100,8 +100,12 @@ process.stdin.on("end", () => {
     } catch (e) {}
     // Normalize numeric → canonical text; unknown values pass through lowercased.
     let effort = EFFORT_CANONICAL[String(effortRaw)] || effortRaw.toLowerCase() || "none";
-    // xhigh only exists on Opus; for Sonnet/Haiku it maps to max (highest level).
-    if (effort === "xhigh" && !modelFull.toLowerCase().includes("opus")) {
+    const modelLower = modelFull.toLowerCase();
+    // Haiku has no thinking effort setting — always hide the badge.
+    if (modelLower.includes("haiku")) {
+      effort = "none";
+    // xhigh only exists on Opus; for Sonnet it maps to max (highest level).
+    } else if (effort === "xhigh" && !modelLower.includes("opus")) {
       effort = "max";
     }
 

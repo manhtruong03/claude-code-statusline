@@ -87,6 +87,23 @@ describe("E2E: effort level display on Line 1", () => {
     assert.ok(lines[0].includes("XH"), `Opus+xhigh should show XH: ${lines[0]}`);
   });
 
+  test("Haiku never shows effort badge regardless of effortLevel", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-test-"));
+    const claudeDir = path.join(tmpDir, ".claude");
+    fs.mkdirSync(claudeDir);
+    fs.writeFileSync(
+      path.join(claudeDir, "settings.json"),
+      JSON.stringify({ effortLevel: "high" })
+    );
+    const lines = run(
+      { ...basePayload(), model: { display_name: "Claude Haiku 4" } },
+      { HOME: tmpDir }
+    );
+    fs.rmSync(tmpDir, { recursive: true });
+    assert.ok(!lines[0].includes("🧠"), `Haiku must not show effort badge: ${lines[0]}`);
+    assert.ok(!lines[0].includes("[E]"), `Haiku must not show ASCII effort: ${lines[0]}`);
+  });
+
   test("xhigh on Sonnet renders as Mx (no xhigh level on Sonnet)", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-test-"));
     const claudeDir = path.join(tmpDir, ".claude");
