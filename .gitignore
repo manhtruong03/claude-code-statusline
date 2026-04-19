@@ -19,3 +19,7 @@ settings.json.backup-*
 # Local testing
 /tmp/
 /test-output/
+
+# Claude Code local settings
+.claude/
+node_modules/

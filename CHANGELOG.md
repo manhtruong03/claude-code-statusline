@@ -9,16 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Rate-limit field shift (critical)** — Line 3 was showing `current 7:00pm% ↻ 62` instead of `current 62% ↻ 7:00pm`. Root cause: bash `IFS=$'\t'` collapses consecutive tab separators (tab is whitespace), so an empty Thinking Effort field caused every subsequent variable to read one position too early. Fixed by switching the field separator to `\x01` (SOH), a non-whitespace byte that never appears in paths, model names, or time strings.
-- **Thinking Effort displays raw number** — Claude Code now stores `CLAUDE_CODE_EFFORT_LEVEL` as a numeric value (`"4"` for `high`, `"5"` for `xhigh`, `"6"` for `max`). The old `head -c 1 | tr` approach passed digits through unchanged, producing `🧠4`. Fixed by mapping `1–6` to canonical text labels before rendering.
+- **Thinking Effort displays raw number** — Claude Code now stores effort as a numeric value (`"4"` for `high`, `"5"` for `xhigh`, `"6"` for `max`). The old `head -c 1 | tr` approach passed digits through unchanged, producing `🧠4`. Fixed by mapping `1–6` to canonical text labels before rendering.
+- **`effortLevel` top-level key** — current Claude Code versions store effort as a top-level `effortLevel` key in `~/.claude/settings.json`, not under `env.CLAUDE_CODE_EFFORT_LEVEL`. Now both paths are read (top-level takes precedence).
+- **Haiku shows spurious effort badge** — Haiku models don't support thinking effort at all. Previously any stored `effortLevel` would still render a badge on Haiku sessions. Now the badge is always hidden for Haiku.
 
 ### Changed
+- **Model-aware `xhigh` normalization** — `xhigh` only exists on Opus; for Sonnet/Haiku sessions a stored `xhigh` value now collapses to `max` (the highest supported level on those models).
 - **New effort level `xhigh`** — displayed as `XH` (bold magenta) to fill the gap between `high` and `max` on Claude Opus models.
 - **New effort level `max`** — displayed as `Mx` (red) instead of a bare `M` to eliminate ambiguity with `medium`.
 - **`medium` now renders as `Md`** (not `M`) for the same reason — a single `M` is indistinguishable from `Mx` at a glance.
 - **Effort color scale** — `max` is now red (`\033[31m`) to signal maximum resource usage; `xhigh` is bold magenta; `high` and below are unchanged.
 
 ### Added
-- **Test suite** (`test/parse.test.js`, `test/e2e.test.js`) — 24 unit + E2E tests covering effort-level mapping and rate-limit field ordering. Run with `npm test`.
+- **Test suite** (`test/parse.test.js`, `test/e2e.test.js`) — 32 unit + E2E tests covering effort-level mapping, model-aware normalization, and rate-limit field ordering. Run with `npm test`.
+
+### Known limitations
+- **Session-only `/effort max`** — the `/effort max` command in Claude Code sets effort *for the current session only* and does **not** write to `settings.json`, nor is the value exposed through the statusline JSON payload or environment variables. The statusline cannot reflect session-only effort changes; it only tracks effort levels persisted to `settings.json` (set via Settings UI or `/effort` with `low`/`medium`/`high`/`xhigh`).
 
 ---
 

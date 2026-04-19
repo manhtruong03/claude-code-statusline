@@ -172,13 +172,11 @@ All configuration happens through environment variables — no config file to ma
 | `CLAUDE_STATUSLINE_ASCII=1` | Plain ASCII mode — no emoji, no Unicode characters |
 | `CLAUDE_STATUSLINE_NERDFONT=1` | Swap emoji icons for [Nerd Font](https://www.nerdfonts.com/) glyphs |
 
-Thinking Effort is read from `~/.claude/settings.json`:
+Thinking Effort is read from `~/.claude/settings.json` — either the top-level `effortLevel` key (current Claude Code format) or `env.CLAUDE_CODE_EFFORT_LEVEL` (legacy):
 
 ```json
 {
-  "env": {
-    "CLAUDE_CODE_EFFORT_LEVEL": "high"
-  }
+  "effortLevel": "high"
 }
 ```
 
@@ -193,7 +191,17 @@ Valid values:
 | `low` or `2` | `L` | gray |
 | `none`, `1`, or absent | *(hidden)* | — |
 
-Claude Code stores this as a number in recent versions; both numeric and text forms are accepted.
+Both numeric and text forms are accepted.
+
+**Per-model support:**
+
+| Model | Supported levels |
+|---|---|
+| **Opus** | low, medium, high, **xhigh**, max |
+| **Sonnet** | low, medium, high, max *(no xhigh — if stored, collapses to `Mx`)* |
+| **Haiku** | *(no effort setting — badge hidden)* |
+
+> ⚠️ **Session-only `/effort max` limitation.** Claude Code's `/effort max` command sets effort *for the current session only* and does **not** write to `settings.json`. The statusline can only display effort that is persisted to `settings.json` — session-only overrides are invisible to any status line command. This is a Claude Code API limitation, not a bug in this project.
 
 Set any of these in your shell profile before launching Claude Code, for example:
 
@@ -303,7 +311,10 @@ The `rate_limits` object is only populated for **Claude.ai Pro/Max subscribers**
 <details>
 <summary><b>Thinking Effort doesn't show</b></summary>
 
-The effort field is read from `~/.claude/settings.json` → `env.CLAUDE_CODE_EFFORT_LEVEL`. Both text (`"high"`, `"medium"`, `"low"`, `"xhigh"`, `"max"`) and numeric (`"4"`, `"5"`, `"6"`) values are accepted. If the field is absent, set to `"none"` / `"1"`, or the file is malformed, the segment is silently hidden.
+- The effort field is read from `~/.claude/settings.json` — either the top-level `effortLevel` key or `env.CLAUDE_CODE_EFFORT_LEVEL`. Both text (`"high"`, `"medium"`, `"low"`, `"xhigh"`, `"max"`) and numeric (`"4"`, `"5"`, `"6"`) values are accepted.
+- On **Haiku** the badge is always hidden (Haiku has no thinking effort setting).
+- On **Sonnet**, any stored `"xhigh"` collapses to `Mx` (Sonnet doesn't have a distinct `xhigh` level).
+- **`/effort max` is session-only** — Claude Code does not write it to `settings.json`, so the statusline cannot detect it. To see `Mx` in the badge, set effort to `max` via the Settings UI (which writes to the file) rather than the session command.
 </details>
 
 <details>
@@ -328,7 +339,7 @@ This project uses `context_window.current_usage` from the most recent API call. 
 
 See [CHANGELOG.md](./CHANGELOG.md) for the full release history. Latest highlights:
 
-- **v1.2.2** — Bug fixes: Line 3 field-shift (IFS tab collapse), numeric effort level support, `xhigh`/`max` new levels, `medium`→`Md` disambiguation
+- **v1.2.2** — Bug fixes: Line 3 field-shift (IFS tab collapse), numeric effort support, `effortLevel` top-level key, new `xhigh`/`max` levels, `medium`→`Md` disambiguation, model-aware effort normalization (Haiku hidden, Sonnet `xhigh`→`Mx`)
 - **v1.2.1** — Compact refinements: effort shortened to 1-letter initial, lines diff removed, minute-only duration, color hierarchy rebalance (gray separators, bold primary numbers)
 - **v1.2.0** — Token-detail redesign: breakdown (in/read/new/out), model context size badge, Thinking Effort, rate limits combined on one line; removed progress bar & cost
 - **v1.1.0** — Three-line layout, truecolor gradient, rate limits, dirty branch, lines diff, ENV-driven theming
