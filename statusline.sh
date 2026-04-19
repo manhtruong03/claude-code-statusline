@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claude-code-statusline v1.2.1
+# claude-code-statusline v1.2.2
 #
 # Three-line status bar for Claude Code, designed for power users who want
 # detailed token management and rate-limit visibility instead of a progress bar:
@@ -9,7 +9,7 @@
 #   Line 3: current 28% ↻ 7:00pm | weekly 79% ↻ mar 10, 10:00am
 #
 # Compact decisions:
-#   • Thinking Effort abbreviated to single letter (H/M/L) inside the badge.
+#   • Thinking Effort abbreviated inside the badge: Mx/XH/H/Md/L (numeric 1–6 or text).
 #   • Lines diff (+N/-M) removed — git status only shows branch + dirty flag.
 #   • Duration shown in minute resolution ("87m", "2h 15m") — never seconds.
 #
@@ -85,14 +85,20 @@ process.stdin.on("end", () => {
     const sid = (o.session_id || "default").replace(/[^a-zA-Z0-9_-]/g, "");
 
     // --- Thinking effort from ~/.claude/settings.json --------------------
-    let effort = "";
+    // Numeric scale: 1=none, 2=low, 3=medium, 4=high, 5=xhigh, 6=max
+    const EFFORT_CANONICAL = {
+      "1": "none", "2": "low", "3": "medium", "4": "high", "5": "xhigh", "6": "max",
+    };
+    let effortRaw = "";
     try {
       const settingsPath = os.homedir() + "/.claude/settings.json";
       if (fs.existsSync(settingsPath)) {
         const s = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-        effort = (s.env && s.env.CLAUDE_CODE_EFFORT_LEVEL) || "";
+        effortRaw = (s.env && s.env.CLAUDE_CODE_EFFORT_LEVEL) || "";
       }
     } catch (e) {}
+    // Normalize numeric → canonical text; unknown values pass through lowercased.
+    const effort = EFFORT_CANONICAL[String(effortRaw)] || effortRaw.toLowerCase() || "none";
 
     // --- Rate limits ------------------------------------------------------
     const rl  = o.rate_limits || {};
@@ -102,7 +108,7 @@ process.stdin.on("end", () => {
     const rl7pct = rl7.used_percentage != null ? Math.floor(rl7.used_percentage) : "";
 
     const fmtReset = (epoch) => {
-      if (!epoch) return "";
+      if (!epoch) return "-";
       const d = new Date(epoch * 1000);
       const now = new Date();
       const sameDay = d.toDateString() === now.toDateString();
@@ -116,10 +122,16 @@ process.stdin.on("end", () => {
       return md + ", " + time;
     };
 
+    // Fields are joined with \x01 (SOH) — a non-whitespace byte that never
+    // appears in file paths, model names, or time strings. This prevents bash
+    // IFS from collapsing consecutive separators when a field is empty (which
+    // would silently shift every subsequent variable by one position).
+    const SEP = "\x01";
+
     fields[0]  = modelShort;
     fields[1]  = ctxSizeLabel;         // "1M" / "200k"
-    fields[2]  = dir;
-    fields[3]  = cwd;
+    fields[2]  = dir   || "-";         // sentinel prevents IFS collapse
+    fields[3]  = cwd   || "-";
     fields[4]  = String(pct);
     fields[5]  = humanize(tUsed);      // "124k"
     fields[6]  = humanize(tIn);        // "58k"
@@ -130,26 +142,32 @@ process.stdin.on("end", () => {
     fields[11] = String(linesAdd);
     fields[12] = String(linesRem);
     fields[13] = sid;
-    fields[14] = effort;               // "high"/"medium"/"low" or ""
-    fields[15] = rl5pct === "" ? "" : String(rl5pct);
+    fields[14] = effort;               // canonical text, never empty ("none" when unset)
+    fields[15] = rl5pct === "" ? "-" : String(rl5pct);
     fields[16] = fmtReset(rl5.resets_at);
-    fields[17] = rl7pct === "" ? "" : String(rl7pct);
-    // fmtReset for rl7 appended separately because we kept fields at 18
-    fields.push(fmtReset(rl7.resets_at));
+    fields[17] = rl7pct === "" ? "-" : String(rl7pct);
+    fields[18] = fmtReset(rl7.resets_at);
   } catch (e) {}
-  process.stdout.write(fields.join("\t"));
+  process.stdout.write(fields.join("\x01"));
 });
 ' 2>/dev/null)
 
-IFS=$'\t' read -r MODEL CTX_SIZE DIR CWD PCT \
+IFS=$'\001' read -r MODEL CTX_SIZE DIR CWD PCT \
                  T_USED T_IN T_READ T_NEW T_OUT \
                  DUR_FMT LINES_ADD LINES_REM SESSION_ID \
                  EFFORT \
                  RL5_PCT RL5_RESET RL7_PCT RL7_RESET <<< "$parsed"
 
-[ -z "$PCT" ] && PCT=0
+[ -z "$PCT" ]       && PCT=0
 [ -z "$LINES_ADD" ] && LINES_ADD=0
 [ -z "$LINES_REM" ] && LINES_REM=0
+# Restore sentinel "-" back to empty for display purposes
+[ "$DIR"      = "-" ] && DIR=""
+[ "$CWD"      = "-" ] && CWD=""
+[ "$RL5_PCT"  = "-" ] && RL5_PCT=""
+[ "$RL5_RESET" = "-" ] && RL5_RESET=""
+[ "$RL7_PCT"  = "-" ] && RL7_PCT=""
+[ "$RL7_RESET" = "-" ] && RL7_RESET=""
 
 # ---------------------------------------------------------------------------
 # ANSI colors
@@ -182,13 +200,18 @@ else                         PCT_COLOR="$GREEN"
 fi
 
 # ---------------------------------------------------------------------------
-# Thinking effort → color (high = magenta, medium = yellow, low = gray)
+# Thinking effort → display label + color
+#   max   → Mx (red)      xhigh → XH (bold magenta)
+#   high  → H  (magenta)  medium → Md (yellow, avoids "M" ambiguity with Max)
+#   low   → L  (gray)     none/unknown → hidden
 # ---------------------------------------------------------------------------
 case "$EFFORT" in
-  high)   EFFORT_COLOR="$MAGENTA" ;;
-  medium) EFFORT_COLOR="$YELLOW"  ;;
-  low)    EFFORT_COLOR="$GRAY"    ;;
-  *)      EFFORT_COLOR=""         ;;
+  max)    EFFORT_LABEL="Mx"; EFFORT_COLOR="$RED"     ;;
+  xhigh)  EFFORT_LABEL="XH"; EFFORT_COLOR="${BOLD}${MAGENTA}" ;;
+  high)   EFFORT_LABEL="H";  EFFORT_COLOR="$MAGENTA" ;;
+  medium) EFFORT_LABEL="Md"; EFFORT_COLOR="$YELLOW"  ;;
+  low)    EFFORT_LABEL="L";  EFFORT_COLOR="$GRAY"    ;;
+  *)      EFFORT_LABEL="";   EFFORT_COLOR=""         ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -259,10 +282,8 @@ LINE1="${CYAN}[${MODEL}${RESET}"
 if [ -n "$CTX_SIZE" ] && [ "$CTX_SIZE" != "0" ]; then
   LINE1="${LINE1}${GRAY}·${RESET}${CYAN}${CTX_SIZE}${RESET}"
 fi
-if [ -n "$EFFORT" ]; then
-  # Compact effort to single uppercase initial (high → H, medium → M, low → L)
-  EFFORT_INITIAL=$(printf '%s' "$EFFORT" | head -c 1 | tr 'a-z' 'A-Z')
-  LINE1="${LINE1}${GRAY}·${RESET}${I_THINK}${EFFORT_COLOR}${EFFORT_INITIAL}${RESET}"
+if [ -n "$EFFORT_LABEL" ]; then
+  LINE1="${LINE1}${GRAY}·${RESET}${I_THINK}${EFFORT_COLOR}${EFFORT_LABEL}${RESET}"
 fi
 LINE1="${LINE1}${CYAN}]${RESET}"
 

@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] — 2026-04-19
+
+### Fixed
+- **Rate-limit field shift (critical)** — Line 3 was showing `current 7:00pm% ↻ 62` instead of `current 62% ↻ 7:00pm`. Root cause: bash `IFS=$'\t'` collapses consecutive tab separators (tab is whitespace), so an empty Thinking Effort field caused every subsequent variable to read one position too early. Fixed by switching the field separator to `\x01` (SOH), a non-whitespace byte that never appears in paths, model names, or time strings.
+- **Thinking Effort displays raw number** — Claude Code now stores `CLAUDE_CODE_EFFORT_LEVEL` as a numeric value (`"4"` for `high`, `"5"` for `xhigh`, `"6"` for `max`). The old `head -c 1 | tr` approach passed digits through unchanged, producing `🧠4`. Fixed by mapping `1–6` to canonical text labels before rendering.
+
+### Changed
+- **New effort level `xhigh`** — displayed as `XH` (bold magenta) to fill the gap between `high` and `max` on Claude Opus models.
+- **New effort level `max`** — displayed as `Mx` (red) instead of a bare `M` to eliminate ambiguity with `medium`.
+- **`medium` now renders as `Md`** (not `M`) for the same reason — a single `M` is indistinguishable from `Mx` at a glance.
+- **Effort color scale** — `max` is now red (`\033[31m`) to signal maximum resource usage; `xhigh` is bold magenta; `high` and below are unchanged.
+
+### Added
+- **Test suite** (`test/parse.test.js`, `test/e2e.test.js`) — 24 unit + E2E tests covering effort-level mapping and rate-limit field ordering. Run with `npm test`.
+
+---
+
 ## [1.2.1] — 2026-04-15
 
 ### Changed

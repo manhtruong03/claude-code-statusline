@@ -10,7 +10,7 @@ Detailed token breakdown, model context size, thinking effort, git state, and Pr
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](#install)
 [![Shell](https://img.shields.io/badge/shell-bash-4EAA25?logo=gnubash&logoColor=white)](#)
 [![Runtime](https://img.shields.io/badge/runtime-Node.js-339933?logo=nodedotjs&logoColor=white)](#)
-[![Version](https://img.shields.io/badge/version-1.2.1-8A2BE2)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.2-8A2BE2)](./CHANGELOG.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 ```text
@@ -35,7 +35,7 @@ Claude Code's default status line is informative but silent on what power users 
 
 | | |
 |---|---|
-| 🎯 **Model + context + effort badge** | `[Opus·1M·🧠H]` — model name, context window size (`1M` / `200k`), and Thinking Effort initial (`H`/`M`/`L`) all in one compact bracket |
+| 🎯 **Model + context + effort badge** | `[Opus·1M·🧠H]` — model name, context window size (`1M` / `200k`), and Thinking Effort label (`Mx`/`XH`/`H`/`Md`/`L`) all in one compact bracket |
 | 🌿 **Dirty branch indicator** | `main*` in red when uncommitted changes are detected |
 | 📁 **Project basename** | Clean `workspace.current_dir` basename, no noisy full paths |
 | ⏰ **Elapsed time** | Minute-resolution — `87m` or `2h 15m`, never seconds |
@@ -182,7 +182,18 @@ Thinking Effort is read from `~/.claude/settings.json`:
 }
 ```
 
-Valid values: `high` (magenta), `medium` (yellow), `low` (dim). Omit the field to hide the segment entirely.
+Valid values:
+
+| Value (text or numeric) | Badge | Color |
+|---|---|---|
+| `max` or `6` | `Mx` | red |
+| `xhigh` or `5` | `XH` | bold magenta |
+| `high` or `4` | `H` | magenta |
+| `medium` or `3` | `Md` | yellow |
+| `low` or `2` | `L` | gray |
+| `none`, `1`, or absent | *(hidden)* | — |
+
+Claude Code stores this as a number in recent versions; both numeric and text forms are accepted.
 
 Set any of these in your shell profile before launching Claude Code, for example:
 
@@ -233,7 +244,7 @@ Claude Code pipes a JSON payload to your configured command on stdin every time 
 |--------------------------------------------------------|----------------------------------------|
 | `model.display_name`                                   | `Opus` (first word) inside cyan badge  |
 | `context_window.context_window_size`                   | `·1M` / `·200k` inside badge           |
-| `~/.claude/settings.json` → `env.CLAUDE_CODE_EFFORT_LEVEL` | `·🧠H` / `·🧠M` / `·🧠L` inside badge |
+| `~/.claude/settings.json` → `env.CLAUDE_CODE_EFFORT_LEVEL` | `·🧠Mx` / `·🧠XH` / `·🧠H` / `·🧠Md` / `·🧠L` inside badge |
 | `context_window.used_percentage`                       | `(25%)` inside Line 2                  |
 | `context_window.current_usage.input_tokens`            | `in 1`                                 |
 | `context_window.current_usage.cache_read_input_tokens` | `read 267k`                            |
@@ -292,7 +303,7 @@ The `rate_limits` object is only populated for **Claude.ai Pro/Max subscribers**
 <details>
 <summary><b>Thinking Effort doesn't show</b></summary>
 
-The effort field is read from `~/.claude/settings.json` → `env.CLAUDE_CODE_EFFORT_LEVEL`. Make sure the file exists and the field is set to `"high"`, `"medium"`, or `"low"`. If the field is absent or the file is malformed, the segment is silently hidden.
+The effort field is read from `~/.claude/settings.json` → `env.CLAUDE_CODE_EFFORT_LEVEL`. Both text (`"high"`, `"medium"`, `"low"`, `"xhigh"`, `"max"`) and numeric (`"4"`, `"5"`, `"6"`) values are accepted. If the field is absent, set to `"none"` / `"1"`, or the file is malformed, the segment is silently hidden.
 </details>
 
 <details>
@@ -317,6 +328,7 @@ This project uses `context_window.current_usage` from the most recent API call. 
 
 See [CHANGELOG.md](./CHANGELOG.md) for the full release history. Latest highlights:
 
+- **v1.2.2** — Bug fixes: Line 3 field-shift (IFS tab collapse), numeric effort level support, `xhigh`/`max` new levels, `medium`→`Md` disambiguation
 - **v1.2.1** — Compact refinements: effort shortened to 1-letter initial, lines diff removed, minute-only duration, color hierarchy rebalance (gray separators, bold primary numbers)
 - **v1.2.0** — Token-detail redesign: breakdown (in/read/new/out), model context size badge, Thinking Effort, rate limits combined on one line; removed progress bar & cost
 - **v1.1.0** — Three-line layout, truecolor gradient, rate limits, dirty branch, lines diff, ENV-driven theming

@@ -1,0 +1,9 @@
+{
+  "name": "claude-code-statusline",
+  "version": "1.2.1",
+  "description": "Three-line status bar for Claude Code",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "license": "MIT"
+}
