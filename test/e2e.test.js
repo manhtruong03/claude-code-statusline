@@ -71,7 +71,7 @@ describe("E2E: effort level display on Line 1", () => {
     assert.ok(line1.includes("🧠H") || line1.includes("[E]H"), `Line 1 should show "H": ${line1}`);
   });
 
-  test("text 'xhigh' renders as XH (not X)", () => {
+  test("xhigh on Opus renders as XH", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-test-"));
     const claudeDir = path.join(tmpDir, ".claude");
     fs.mkdirSync(claudeDir);
@@ -79,10 +79,28 @@ describe("E2E: effort level display on Line 1", () => {
       path.join(claudeDir, "settings.json"),
       JSON.stringify({ env: { CLAUDE_CODE_EFFORT_LEVEL: "xhigh" } })
     );
-    const lines = run(basePayload(), { HOME: tmpDir });
+    const lines = run(
+      { ...basePayload(), model: { display_name: "Claude Opus 4" } },
+      { HOME: tmpDir }
+    );
     fs.rmSync(tmpDir, { recursive: true });
-    const line1 = lines[0];
-    assert.ok(line1.includes("XH"), `Line 1 should show "XH" for xhigh: ${line1}`);
+    assert.ok(lines[0].includes("XH"), `Opus+xhigh should show XH: ${lines[0]}`);
+  });
+
+  test("xhigh on Sonnet renders as Mx (no xhigh level on Sonnet)", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-test-"));
+    const claudeDir = path.join(tmpDir, ".claude");
+    fs.mkdirSync(claudeDir);
+    fs.writeFileSync(
+      path.join(claudeDir, "settings.json"),
+      JSON.stringify({ env: { CLAUDE_CODE_EFFORT_LEVEL: "xhigh" } })
+    );
+    const lines = run(
+      { ...basePayload(), model: { display_name: "Claude Sonnet 4" } },
+      { HOME: tmpDir }
+    );
+    fs.rmSync(tmpDir, { recursive: true });
+    assert.ok(lines[0].includes("Mx"), `Sonnet+xhigh should show Mx: ${lines[0]}`);
   });
 
   test("text 'medium' renders as Md (not M, to avoid confusion with Max)", () => {
@@ -101,6 +119,58 @@ describe("E2E: effort level display on Line 1", () => {
     // Check the badge portion only (bounded by "[" and "]")
     const badge = line1.match(/\[.*?\]/)?.[0] || "";
     assert.ok(!badge.match(/·M[^d]/), `Badge should not show bare "·M" in: ${badge}`);
+  });
+
+  test("xhigh on non-Opus model (Sonnet/Haiku) renders as Mx not XH", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-test-"));
+    const claudeDir = path.join(tmpDir, ".claude");
+    fs.mkdirSync(claudeDir);
+    fs.writeFileSync(
+      path.join(claudeDir, "settings.json"),
+      JSON.stringify({ effortLevel: "xhigh" })
+    );
+    // Sonnet model — xhigh should collapse to max
+    const lines = run(
+      { ...basePayload(), model: { display_name: "Claude Sonnet 4" } },
+      { HOME: tmpDir }
+    );
+    fs.rmSync(tmpDir, { recursive: true });
+    assert.ok(lines[0].includes("Mx"), `Sonnet+xhigh should show Mx: ${lines[0]}`);
+    assert.ok(!lines[0].includes("XH"), `Sonnet+xhigh must not show XH: ${lines[0]}`);
+  });
+
+  test("xhigh on Opus model renders as XH", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-test-"));
+    const claudeDir = path.join(tmpDir, ".claude");
+    fs.mkdirSync(claudeDir);
+    fs.writeFileSync(
+      path.join(claudeDir, "settings.json"),
+      JSON.stringify({ effortLevel: "xhigh" })
+    );
+    // Opus model — xhigh is valid, must show XH
+    const lines = run(
+      { ...basePayload(), model: { display_name: "Claude Opus 4" } },
+      { HOME: tmpDir }
+    );
+    fs.rmSync(tmpDir, { recursive: true });
+    assert.ok(lines[0].includes("XH"), `Opus+xhigh should show XH: ${lines[0]}`);
+  });
+
+  test("effortLevel top-level key (current Claude Code format) is read correctly", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-test-"));
+    const claudeDir = path.join(tmpDir, ".claude");
+    fs.mkdirSync(claudeDir);
+    // Current Claude Code stores effort as top-level "effortLevel", not inside "env"
+    fs.writeFileSync(
+      path.join(claudeDir, "settings.json"),
+      JSON.stringify({ effortLevel: "xhigh" })
+    );
+    const lines = run(
+      { ...basePayload(), model: { display_name: "Claude Opus 4" } },
+      { HOME: tmpDir }
+    );
+    fs.rmSync(tmpDir, { recursive: true });
+    assert.ok(lines[0].includes("XH"), `Should read effortLevel top-level key on Opus: ${lines[0]}`);
   });
 
   test("text 'max' renders as Mx (not M)", () => {

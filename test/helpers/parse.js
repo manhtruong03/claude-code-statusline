@@ -98,8 +98,11 @@ function parseFields(jsonStr, effort) {
   const linesRem = Number((o.cost && o.cost.total_lines_removed) || 0);
   const sid = (o.session_id || "default").replace(/[^a-zA-Z0-9_-]/g, "");
 
-  // Normalize effort: numeric → canonical text
-  const effortCanon = canonicalEffort(effort);
+  // Normalize effort: numeric → canonical text, then model-aware xhigh→max
+  let effortCanon = canonicalEffort(effort);
+  if (effortCanon === "xhigh" && !modelFull.toLowerCase().includes("opus")) {
+    effortCanon = "max";
+  }
 
   const rl = o.rate_limits || {};
   const rl5 = rl.five_hour || {};

@@ -94,11 +94,16 @@ process.stdin.on("end", () => {
       const settingsPath = os.homedir() + "/.claude/settings.json";
       if (fs.existsSync(settingsPath)) {
         const s = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-        effortRaw = (s.env && s.env.CLAUDE_CODE_EFFORT_LEVEL) || "";
+        // Claude Code stores effort in effortLevel (current) or env.CLAUDE_CODE_EFFORT_LEVEL (legacy)
+        effortRaw = s.effortLevel || (s.env && s.env.CLAUDE_CODE_EFFORT_LEVEL) || "";
       }
     } catch (e) {}
     // Normalize numeric → canonical text; unknown values pass through lowercased.
-    const effort = EFFORT_CANONICAL[String(effortRaw)] || effortRaw.toLowerCase() || "none";
+    let effort = EFFORT_CANONICAL[String(effortRaw)] || effortRaw.toLowerCase() || "none";
+    // xhigh only exists on Opus; for Sonnet/Haiku it maps to max (highest level).
+    if (effort === "xhigh" && !modelFull.toLowerCase().includes("opus")) {
+      effort = "max";
+    }
 
     // --- Rate limits ------------------------------------------------------
     const rl  = o.rate_limits || {};

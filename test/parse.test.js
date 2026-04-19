@@ -38,14 +38,14 @@ describe("effort level display", () => {
     { input: "2", label: "L",  desc: "2 (low) → L" },
     { input: "3", label: "Md", desc: "3 (medium) → Md (not M, to distinguish from Max)" },
     { input: "4", label: "H",  desc: "4 (high) → H" },
-    { input: "5", label: "XH", desc: "5 (xhigh) → XH" },
+    { input: "5", label: "Mx", desc: "5 (xhigh) on non-Opus → Mx (Sonnet/Haiku have no xhigh)" },
     { input: "6", label: "Mx", desc: "6 (max) → Mx (not M, to distinguish from Medium)" },
     // Text format (backwards compatibility)
     { input: "none",   label: "",   desc: "text none → hidden" },
     { input: "low",    label: "L",  desc: "text low → L" },
     { input: "medium", label: "Md", desc: "text medium → Md" },
     { input: "high",   label: "H",  desc: "text high → H" },
-    { input: "xhigh",  label: "XH", desc: "text xhigh → XH" },
+    { input: "xhigh",  label: "Mx", desc: "text xhigh on non-Opus (Sonnet) → Mx" },
     { input: "max",    label: "Mx", desc: "text max → Mx" },
     // Unknown / empty
     { input: "",       label: "",   desc: "empty → hidden" },
@@ -60,6 +60,33 @@ describe("effort level display", () => {
       assert.equal(fields.effortLabel, label);
     });
   }
+});
+
+// xhigh is only valid on Opus; on other models it collapses to max.
+describe("xhigh model-aware normalization", () => {
+  test("xhigh on Opus → XH", () => {
+    const fields = parseFields(
+      JSON.stringify(makePayload({ model: { display_name: "Claude Opus 4" } })),
+      "xhigh"
+    );
+    assert.equal(fields.effortLabel, "XH");
+  });
+
+  test("xhigh on Sonnet → Mx", () => {
+    const fields = parseFields(
+      JSON.stringify(makePayload({ model: { display_name: "Claude Sonnet 4" } })),
+      "xhigh"
+    );
+    assert.equal(fields.effortLabel, "Mx");
+  });
+
+  test("xhigh on Haiku → Mx", () => {
+    const fields = parseFields(
+      JSON.stringify(makePayload({ model: { display_name: "Claude Haiku 4" } })),
+      "xhigh"
+    );
+    assert.equal(fields.effortLabel, "Mx");
+  });
 });
 
 // ---------------------------------------------------------------------------
